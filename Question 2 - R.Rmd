@@ -1,0 +1,159 @@
+---
+title: "Abdussamad - 190519205 - Question 2 - R"
+author: "Abdussamad Roshan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 2 - Do older planes suffer more delays?
+
+## Importing and Loading Packages
+
+```{r}
+# # Installing the necessary packages
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("plotly")
+install.packages("rmarkdown")
+install.packages("tidyverse")
+```
+
+```{r}
+# Loading the packages
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(rmarkdown)
+library(tidyr)
+library(tidyverse)
+```
+
+## Importing the Datasets
+
+```{r}
+# Importing the cleaned dataset
+cleaned_df <- read.csv("Cleaned_Dataset_R.csv")
+# Importing the Plane Data, any NA or empty values are replaced with NA
+plane_df <- read.csv("plane-data.csv", na.strings = c("", "NA"))
+```
+
+```{r}
+# Checking the first 5 rows of the cleaned dataset
+head(cleaned_df, n = 5)
+```
+
+```{r}
+# Showing first 5 rows of the plane dataset
+head(plane_df, n = 5)
+```
+
+```{r}
+#Filtering to keep only the neccessary columns in the main dataset
+cleaned_df <- cleaned_df[, c("TailNum", "ArrDelay", "DepDelay")]
+cleaned_df
+```
+
+```{r}
+# Filtering to keep only the neccessary columns in the plane dataset
+plane_df_filtered <- plane_df[, c("tailnum", "year")]
+plane_df_filtered
+```
+
+```{r}
+# Checking for null values in the filtered plane dataset
+colSums(is.na(plane_df_filtered))
+```
+
+```{r}
+# Dropping all rows with null values
+plane_df_filtered <- na.omit(plane_df_filtered)
+plane_df_filtered
+```
+
+```{r}
+# Checking if all null values have been removed
+colSums(is.na(plane_df_filtered))
+```
+
+```{r}
+# Showing general information about the filtered plane data to check if data has been cleaned properly
+str(plane_df_filtered)
+```
+
+We can see that the "year" columns' data type is chr which suggests uncleaned data as the data type should be integer
+
+```{r}
+# Getting the value counts for the "year" column
+table(plane_df_filtered$year)
+```
+
+We can see that there are values "None" and "0000" which needs to be removed
+
+```{r}
+# Dropping "None" and "0000" from the "year" column
+plane_df_filtered <- subset(plane_df_filtered, year != "0000" & year != "None")
+plane_df_filtered
+```
+
+```{r}
+# Checking if None" and "0000" has been removed
+table(plane_df_filtered$year)
+```
+
+```{r}
+# Converting the data type of the "year" column to integer
+plane_df_filtered$year <- as.integer(plane_df_filtered$year)
+```
+
+```{r}
+# Checking if the data type has been converted
+str(plane_df_filtered)
+```
+
+The common column we want to merge on is the TailNum, but the column name differs between the two dataframes
+
+```{r}
+# Changing the "tailnum" column in the filtered plane dataframe to "TailNum" to make merging possible
+names(plane_df_filtered)[names(plane_df_filtered) == "tailnum"] <- "TailNum"
+plane_df_filtered
+```
+
+```{r}
+# Merging the two dataframes on the"TailNum" column
+merged_df <- merge(cleaned_df, plane_df_filtered, by = "TailNum")
+merged_df
+```
+
+```{r}
+# Checking the information of the merged datframe
+str(merged_df)
+```
+
+```{r}
+# Checking for null values in the merged dataset
+colSums(is.na(merged_df))
+```
+
+```{r}
+# Creating a new varibale to hold the mean average delay grouped by year
+mean_ArrDelay_byyear <- merged_df[, c("year", "ArrDelay")] %>% 
+  group_by(year) %>% 
+  summarise(mean_ArrDelay = mean(ArrDelay))
+mean_ArrDelay_byyear
+```
+
+```{r}
+ggplot(data = mean_ArrDelay_byyear, aes(x = year, y = mean_ArrDelay)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "red") +
+  labs(title = "Average delay for manufacture year of plane", 
+       x = "Year of Manufacture", 
+       y = "Average Delay in Minutes") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Saving the plot locally as a png
+ggsave("Average Delay for Plane Year - R.png")
+```

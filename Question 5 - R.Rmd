@@ -1,0 +1,334 @@
+---
+title: "Abdussamad - 190519205 - Question 5 - R"
+author: "Abdussamad Roshan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 5 - Use the available variables to construct a model that predicts delays.
+
+## Importing and Loading Packages
+
+```{r}
+# # Installing the necessary packages
+install.packages("lubridate")
+install.packages("stringi")
+install.packages("Rtools")
+install.packages("janitor")
+install.packages("vtree")
+install.packages('rmarkdown')
+install.packages("installr")
+install.packages("mlr3")
+install.packages("mlr3pipelines")
+install.packages("mlr3viz")
+install.packages("mlr3learners")
+install.packages('rmarkdown')
+install.packages("corrplot")
+install.packages("future") 
+install.packages("precrec") 
+install.packages("reshape2")
+install.packages("pheatmap")
+```
+
+```{r}
+# Loading the packages
+library(dplyr)
+library(ggplot2)
+library(janitor)
+library(lubridate)
+library(plotly)
+library(rmarkdown)
+library(scales)
+library(stringi)
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(mlr3)
+library(mlr3pipelines)
+library(mlr3learners)
+library(mlr3viz)
+library(corrplot)
+library(future)
+library(precrec)
+library(reshape2)
+library(pheatmap)
+```
+
+## Importing the Dataset
+
+```{r}
+# Importing the cleaned dataset
+cleaned_df <- read.csv("Cleaned_Dataset_R.csv")
+# Importing the Plane Data, any NA or empty values are replaced with NA
+plane_df <- read.csv("plane-data.csv", na.strings = c("", "NA"))
+```
+
+```{r}
+# Checking the first 5 rows of the cleaned dataset
+head(cleaned_df, n = 5)
+```
+
+```{r}
+# Showing first 5 rows of the plane dataset
+head(plane_df, n = 5)
+```
+
+ArrDelay will be our target variable to since we want to predict delays
+
+```{r}
+# Creating a new column "PresenceOfArrivalDelay", if the "ArrDelay" is greater than 0 "Present" is entered and if not "Absent" 
+cleaned_df$PresenceOfArrivalDelay <- ifelse(cleaned_df$ArrDelay > 0, "Present", "Absent")
+```
+
+```{r}
+# Filtering to keep only the neccessary columns in the plane dataset
+plane_df_filtered <- plane_df[, c("tailnum", "year")]
+plane_df_filtered
+```
+
+```{r}
+# Checking for null values in the filtered plane dataset
+colSums(is.na(plane_df_filtered))
+```
+
+```{r}
+# Dropping all rows with null values
+plane_df_filtered <- na.omit(plane_df_filtered)
+plane_df_filtered
+```
+
+```{r}
+# Showing general information about the filtered plane data to check if data has been cleaned properly
+str(plane_df_filtered)
+```
+
+We can see that the "year" columns' data type is chr which suggests uncleaned data as the data type should be integer
+
+```{r}
+# Getting the value counts for the "year" column
+table(plane_df_filtered$year)
+```
+
+We can see that there are values "None" and "0000" which needs to be removed
+
+```{r}
+# Dropping "None" and "0000" from the "year" column
+plane_df_filtered <- subset(plane_df_filtered, year != "0000" & year != "None")
+plane_df_filtered
+```
+
+```{r}
+# Checking if None" and "0000" has been removed
+table(plane_df_filtered$year)
+```
+
+```{r}
+# Converting the data type of the "year" column to integer
+plane_df_filtered$year <- as.integer(plane_df_filtered$year)
+```
+
+```{r}
+# Checking if the data type has been converted
+str(plane_df_filtered)
+```
+
+The common column we want to merge on is the TailNum, but the column name differs between the two dataframes
+
+```{r}
+# Changing the "tailnum" column in the filtered plane dataframe to "TailNum" to make merging possible
+names(plane_df_filtered)[names(plane_df_filtered) == "tailnum"] <- "TailNum"
+plane_df_filtered
+```
+
+```{r}
+# Merging the two dataframes on the"TailNum" column
+merged_df <- merge(cleaned_df, plane_df_filtered, by = "TailNum")
+merged_df
+```
+
+```{r}
+# Removing data not needed anymore to avoid RAM bottlenecks
+rm(cleaned_df)
+rm(plane_df)
+rm(plane_df_filtered)
+```
+
+```{r}
+# Renaming 'year' to 'YearOfManufacture' in the merged dataset
+names(merged_df)[names(merged_df) == "year"] <- "YearOfManufacture"
+merged_df
+```
+
+## Creating a Correlation matrix for the variables
+
+```{r}
+# Subsetting the dataframe to include only numeric columns
+numeric_cols <- sapply(merged_df, is.numeric)
+merged_df_numeric <- merged_df[, numeric_cols]
+
+# Creating a Pearson correlation matrix for the numeric columns
+correlation_matrix <- cor(merged_df_numeric, method = "pearson")
+
+# Plotting the heatmap 
+ggplot(data = reshape2::melt(correlation_matrix)) +
+  geom_tile(aes(x = Var1, y = Var2, fill = value)) +
+  scale_fill_gradient(low = "white", high = "blue", limits = c(-1,1)) +
+  theme_minimal() +
+  coord_fixed() +
+  labs(title = "Pearson Correlation Matrix for Variables", fill = "Correlation") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# Saving the plot locally as a png 
+ggsave("Pearson Correlation Matrix for Variables - R.png", bg="white")
+```
+
+```{r}
+# Getting the value counts of "Cancelled"
+table(merged_df$Cancelled)
+```
+
+```{r}
+# Getting the value counts of "Diverted"
+table(merged_df$Diverted)
+```
+
+```{r}
+# Checking for null values in the merged dataset
+colSums(is.na(merged_df))
+```
+
+## Feature Selection
+
+```{r}
+# Creating a dataframe with only the required features
+data_ml <- merged_df %>% 
+  select(Month, DayOfWeek, DepDelay, Origin, Dest, Distance, TaxiOut, PresenceOfArrivalDelay)
+
+# Numerical Features
+data_numerical <- c("Distance", "DepDelay", "TaxiOut")
+
+# Categorical Features
+data_categorical <- c("Month", "DayOfWeek", "Origin", "Dest")
+```
+
+```{r}
+#Converting categorical data to factor variables
+for(column in data_categorical) {
+  data_ml[,column] <- as.factor(data_ml[[column]])
+}
+rm(column)
+```
+
+```{r}
+# Converting PresenceOfArrivalDelay to factor
+data_ml$`PresenceOfArrivalDelay` <- as.factor(data_ml$`PresenceOfArrivalDelay`)
+```
+
+After multiple attempts to use the full mertged dataset for the model and running into memory errors, it was decided to take a random sample of 20% from merged dataset("merged_df)
+
+```{r}
+# using set.seed to ensure replicability 
+set.seed(1)
+
+# Taking a random sample of 10% from the merged dataset
+data_ml1 <- sample_frac(data_ml, size = 0.10)
+
+# Removing unnessary data and running garbage collector to free up memory
+rm(merged_df)
+rm(merged_df_numeric)
+rm(numeric_cols)
+rm(data_ml)
+gc()
+```
+
+## Building the Model
+
+```{r}
+# Creating a new task
+task <- TaskClassif$new("Presence Of Arrival Delay", backend=data_ml1, target = "PresenceOfArrivalDelay", positive = "Present")
+
+# Selecting the Area Under the Curve as our measure
+measure <- msr('classif.auc') 
+```
+
+```{r}
+# Choosing  logistic regression model that will predict the proabability of of falling into a particular category
+learner_logisticreg <- lrn("classif.log_reg", predict_type = "prob")
+```
+
+```{r}
+# If any null values are present, identify all null values in all columns
+mp_missind <- po("missind", affect_columns = NULL, which = "all") 
+
+# Imputing missing numerical features (if any) and scaling 
+imp_num <- po("imputemean", affect_columns = selector_type("numeric")) 
+scale_data <- po("scale", affect_columns = selector_type("numeric")) 
+
+# Imputeing missing categorical features (if any) and one hot encoding 
+imp_factor = po("imputeoor", affect_columns = selector_type("factor"))
+onehot_encode = po("encode", affect_columns = selector_type("factor"))
+```
+
+```{r}
+# Building a pipeline for the model
+graph = gunion(list(mp_missind, imp_num %>>% imp_factor)) %>>%
+                 po("featureunion") %>>%
+                 scale_data %>>%
+                 onehot_encode %>>%
+                  po(learner_logisticreg)
+
+graph <- GraphLearner$new(graph)
+```
+
+```{r}
+# Ensuring replicability by random seed
+set.seed(1)
+#70% of the data will be used for training
+train_dataset <- sample(task$nrow, 0.7 * task$nrow)
+# The remaining 30% will be used as the test data
+test_dataset <- setdiff(seq_len(task$nrow), train_dataset)
+# Training the model
+graph$train(task, row_ids = train_dataset)
+```
+
+## Model Evaluation
+
+```{r}
+# Testing the created model by using itto make predictions of the PresenceOfArrivalDelay in the test dataset
+prediction <- graph$predict(task, row_ids = test_dataset)
+```
+
+### ROC Curve
+
+```{r}
+# Plotting the ROC curve
+autoplot(prediction, type = "roc")
+
+# Saving the plot locally as a PNG
+ggsave("ROC Curve - R.png", bg="white")
+```
+
+```{r}
+# Getting the Area Under the ROC Curve
+prediction$score(measure)
+```
+
+### Confusion Matrix
+
+```{r}
+# Setting the output display format for numeric values in R
+options(scipen=1000)
+
+# Create a custom color palette with shades of green
+my_palette <- colorRampPalette(c("white", "green"))(n = 100)
+
+# Create heatmap using pheatmap with custom color palette
+confusionmatrix <- prediction$confusion
+my_plot <- pheatmap(confusionmatrix, display_numbers = TRUE, color = my_palette)
+
+#Saving the plot locally as a PNG
+ggsave("Confusion Matrix - R.png", plot = my_plot)
+```

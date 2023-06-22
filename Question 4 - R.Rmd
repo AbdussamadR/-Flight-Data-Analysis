@@ -1,0 +1,213 @@
+---
+title: "Abdussamad - 190519205 - Question 4 - R"
+author: "Abdussamad Roshan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 4 - Can you detect cascading failures as delays in one airport create delays in others?
+
+## Importing and Loading Packages
+
+```{r}
+# Install the following packages if not already installed
+install.packages("lubridate")
+install.packages("stringi")
+install.packages("Rtools")
+install.packages("janitor")
+install.packages("vtree")
+install.packages('rmarkdown')
+```
+
+```{r}
+# Loading the packages
+library(dplyr)
+library(ggplot2)
+library(janitor)
+library(lubridate)
+library(plotly)
+library(rmarkdown)
+library(scales)
+library(stringi)
+library(tidyr)
+library(tidyverse)
+```
+
+## Importing the Dataset
+
+```{r}
+# Importing the main cleaned dataset, any NA or empty values are replaced with NA
+cleaned_df <- read.csv("Cleaned_Dataset_R.csv", na.strings = c("", "NA"))
+
+cleaned_df
+```
+
+Using the "CRSDepTime", "DayofMonth", "Month" and "Year" columns, a new column is created to give the scheduled departure time of each flight in datetime format
+
+```{r}
+# Selecting the first 2 numbers gives the minute part of the CRSDepTime
+CRSDepTime_Minutes <- stri_sub(as.character(cleaned_df$CRSDepTime), -2, -1)
+```
+
+```{r}
+# Checking the type of CRSDepTime_Minutes
+typeof(CRSDepTime_Minutes)
+```
+
+We need the type to be a list for future operations
+
+```{r}
+# Making a list with CRSDepTime_Minutes
+List_CRSDepTime_Minutes <- as.list(CRSDepTime_Minutes)
+```
+
+```{r}
+# Selecting the last 2 numbers gives the hour part of the CRSDepTime
+CRSDepTime_Hours <- stri_sub(as.character(cleaned_df$CRSDepTime), 1, -3)
+```
+
+```{r}
+# Checking the type of CRSDepTime_Hours
+typeof(CRSDepTime_Hours)
+```
+
+```{r}
+# Making a list with CRSDepTime_Hours
+List_CRSDepTime_Hours <- as.list(CRSDepTime_Hours)
+```
+
+There will be entries where CRSDepTime_Hours will be empty, for example 30 which indicates 00:30 am, will not have an hour value. Therefore all such empty entries will be replaced with 0 to avoid errors.'
+
+```{r}
+# Replacing empty values with 0
+List_CRSDepTime_Hours[List_CRSDepTime_Hours==""] <- 0
+```
+
+```{r}
+# Getting the DayofMonth, converting it to a character and storing it in a list
+List_Day <- as.list(as.character(cleaned_df$DayofMonth))
+```
+
+```{r}
+# Getting the Month, converting it to a character and storing it in a list
+List_Month <- as.list(as.character(cleaned_df$Month))
+```
+
+```{r}
+# Getting the Year, converting it to a character and storing it in a list
+List_Year <- as.list(as.character(cleaned_df$Year))
+```
+
+Adding a column to full_dataset which contains a string with information about the Date and Time of estimated departure of each flight
+
+```{r}
+# Creating the new column called "DateTimeCRSDepTime"
+# This holds a string containing the Day, Month, Year, Hours and Minutes seperated by a "-"
+cleaned_df["DateTimeCRSDepTime"] <- paste(List_Day, List_Month, List_Year, List_CRSDepTime_Hours, List_CRSDepTime_Minutes, sep="-")
+```
+
+```{r}
+# Removing data not needed anymore to avoid RAM bottlenecks
+rm(List_CRSDepTime_Hours)
+rm(List_CRSDepTime_Minutes)
+rm(List_Day)
+rm(List_Month)
+rm(List_Year)
+rm(CRSDepTime_Hours)
+rm(CRSDepTime_Minutes)
+```
+
+```{r}
+# Converting "DateTimeCRSDepTime" to date-time
+cleaned_df$DateTimeCRSDepTime <- as.POSIXct(cleaned_df$DateTimeCRSDepTime, format="%d-%m-%Y-%H-%M")
+```
+
+```{r}
+# Examining the class of "DateTimeCRSDepTime" column
+class(cleaned_df$DateTimeCRSDepTime)
+# Removing class attribute to get the numeric value
+unclass(cleaned_df$DateTimeCRSDepTime[[1]])
+```
+
+```{r}
+# Creating new column "Total_Delay" that adds up the arrival delay and departure delay 
+cleaned_df["TotalDelay"] <- cleaned_df$ArrDelay + cleaned_df$DepDelay
+```
+
+```{r}
+# Sorting the flights by "DateTimeCRSDepTime"  and grouping by TailNum
+cleaned_df <- cleaned_df %>% arrange(DateTimeCRSDepTime) %>% group_by(TailNum)
+```
+
+Shifting the values in each group down by one position, so that each row has the "TotalDelay" value of the previous row
+
+```{r}
+# Creating a new column called "PreviousDelay"
+cleaned_df["PreviousDelay"] <- cleaned_df$TotalDelay
+```
+
+```{r}
+# Moving "PreviousDelay" down by 1 row
+cleaned_df <- cleaned_df %>% mutate_at(c("PreviousDelay"), list(lag), n = 1)
+```
+
+```{r}
+# Checking for any null values
+colSums(is.na(cleaned_df))
+```
+
+There are multiple reasons for the existence of null values 1. If a plane has had only 1 recorded flight it will not have a "PreviousDelay" 2. The first flight for any individual plane will also not have any "PreviousDelay"
+
+```{r}
+# Dropping null values and checking if they have been removed
+cleaned_df <- na.omit(cleaned_df)
+colSums(is.na(cleaned_df))
+```
+
+## Plotting a scatter plot with a regression line to show how the delay of the previous flight affects the delay of the next flight
+
+```{r}
+# Plotting a scatter plot with a linear regression line
+ggplot(data = cleaned_df, aes(x = PreviousDelay, y = TotalDelay)) + 
+  geom_point(color = "blue") +
+  geom_smooth(method = "lm", color = "red") +
+  
+  # Setting the x-axis and y-axis labels and the title
+  labs(x = "Delay of previous flight in minutes", y = "Delay of next flight in minutes",
+       title = "Scatter plot for Previous Delay vs Current Delay") +
+  
+  theme(plot.title = element_text(size = 15, hjust = 0.5), 
+        axis.title.x = element_text(size = 13), 
+        axis.title.y = element_text(size = 13))
+
+# Saving the plot locally as a PNG
+ggsave("Previuos Delay vs Next Delay - R.png")
+```
+
+## Getting a Contingency table for "PresenceOfCurrentDelay" vs "PresenceOfCurrentDelay"
+
+```{r}
+# Creating a new column "PresenceOfCurrentDelay", if the "TotalDelay" is greater than 0 "Present" is entered and if not "Absent" 
+cleaned_df$PresenceOfCurrentDelay <- ifelse(cleaned_df$TotalDelay > 0, "Present", "Absent")
+```
+
+```{r}
+# Creating a new column "PresenceOfPreviousDelay", if the "PreviosDelay" is greater than 0 "Present" is entered and if not "Absent"
+cleaned_df$PresenceOfPreviousDelay <- ifelse(cleaned_df$PreviousDelay > 0, "Present", "Absent")
+```
+
+```{r}
+cleaned_df
+```
+
+```{r}
+# Getting a contingency table and getting the percentages up to 2 decimal places
+
+crosstab <- tabyl(cleaned_df, PresenceOfPreviousDelay, PresenceOfCurrentDelay) %>% adorn_percentages("row") %>% adorn_pct_formatting(digits = 2)
+crosstab
+```
+
+# 

@@ -1,0 +1,129 @@
+---
+title: "Abdussamad - 190519205 - Data Cleaning - R"
+author: "Abdussamad Roshan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing and Loading Packages
+
+```{r}
+# Installing the necessary packages
+install.packages("dplyr")
+install.packages("rmarkdown")
+install.packages("tidyverse")
+```
+
+```{r}
+# Loading the packages
+library(dplyr)
+library(rmarkdown)
+library(tidyverse)
+```
+
+## Importing and Merging the 2 datasets
+
+```{r}
+# importing the datasets, any NA or empty values are replaced with NA
+Y2006_df <- read.csv("2006.csv", na.strings = c("", "NA"))
+Y2007_df <- read.csv("2007.csv", na.strings = c("", "NA"))
+```
+
+```{r}
+# Checking the dimensions of the datasets to see if they can be merged column-wise
+dim(Y2006_df)
+dim(Y2007_df)
+```
+
+```{r}
+# Merging the 2 datasets
+df <- rbind(Y2006_df, Y2007_df)
+```
+
+```{r}
+# Removing the 2 datasets to free up memory and prevent RAM bottlenecks
+rm(Y2006_df)
+rm(Y2007_df)
+```
+
+```{r}
+# Basic information about the columns and their data types
+str(df)
+```
+
+```{r}
+# Checking the first 5 rows of the merged dataset
+head(df, n = 5)
+```
+
+## Checking for duplicates and removing duplicated rows
+
+```{r}
+# Checking for duplicated rows
+head(df[duplicated(df),])
+```
+
+```{r}
+# Dropping Duplicated Rows
+df <- distinct(df)
+```
+
+```{r}
+# Checking if duplicated rows have been removed
+head(df[duplicated(df),])
+```
+
+## Handling Null Values
+
+```{r}
+# Checking the amount of null values in each column
+colSums(is.na(df))
+```
+
+The cancellation code column will not be used in any of the future analysis and has high number of null values since whenever a flight is not cancelled there will not be a cancellation code, therefore the "CancellationCode" column will be dropped.
+
+```{r}
+# Dropping "CancellationCode" column as it has no further use or impact in future analysis
+df <- subset(df, select = -c(CancellationCode))
+```
+
+### Dropping rows with Null Values
+
+```{r}
+# Removing all rows with null values
+df <- na.omit(df)
+```
+
+```{r}
+# Checking if all null values have been dropped
+colSums(is.na(df))
+```
+
+## Checking min and max bounds of the data
+
+{r} Checking if data is within logical bounds, for example whether days of the month is between 1 and 31 or if time values are between 0 and 2400
+
+```{r}
+# Getting the minimum amd maximum values for each column
+sapply(df, min)
+sapply(df, max)
+```
+
+There is data out of logical bounds which needs to be corrected
+
+```{r}
+# Keeping rows only if"ArrTime" and "DepTime" is less than 2400
+df <- df[df$ArrTime < 2400 & df$DepTime < 2400, ]
+```
+
+## Exporting the Cleaned Data for future use
+
+```{r}
+# Exporting the cleaned dataset to a new csv file for use in other tasks
+write.csv(df,"Cleaned_Dataset_R.csv", row.names = FALSE)
+```
+
+## 

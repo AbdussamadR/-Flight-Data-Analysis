@@ -1,0 +1,137 @@
+---
+title: "Abdussamad - 190519205 - Question 1 - R"
+author: "Abdussamad Roshan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1 - When is the best time of day, day of the week, and time of year to fly to minimise delays?
+
+## Importing and Loading Packages
+
+```{r}
+# # Installing the necessary packages
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("plotly")
+install.packages("rmarkdown")
+install.packages("tidyverse")
+```
+
+```{r}
+# Loading the packages
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(rmarkdown)
+library(tidyr)
+library(tidyverse)
+```
+
+## Importing the Dataset
+
+```{r}
+# Importing the cleaned dataset
+cleaned_df <- read.csv("Cleaned_Dataset_R.csv")
+```
+
+```{r}
+# Checking the first 5 rows of the cleaned dataset
+head(cleaned_df, n = 5)
+```
+
+```{r}
+# Checking for any null values
+colSums(is.na(cleaned_df))
+```
+
+## Best time of the year to fly to minimize delays
+
+```{r}
+# Creating a new varibale to hold the average delay grouped by month
+mean_ArrDelay_month <- cleaned_df %>%
+  group_by(Month) %>%
+  summarize(mean_ArrDelay = mean(ArrDelay, na.rm = TRUE))
+mean_ArrDelay_month
+```
+
+```{r}
+# Plotting a line plot with to show how average arrival delay varies with month
+ggplot(mean_ArrDelay_month, aes(x = Month, y = mean_ArrDelay)) +
+  geom_line() +
+  ggtitle("Average Arrival Delay for Each Month") +
+  xlab("Month") +
+  ylab("Average Arrival Delay in minutes") +
+  scale_x_continuous(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec")) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+  
+# Saving the plot locally as a png
+ggsave("Average Delay for Each Month - R.png")
+```
+
+```{r}
+# Creating a new varibale to hold the average delay grouped by day
+mean_ArrDelay_day <- cleaned_df %>%
+  group_by(DayOfWeek) %>%
+  summarise(mean_ArrDelay = mean(ArrDelay, na.rm = TRUE))
+mean_ArrDelay_day
+```
+
+```{r}
+# Plotting a line plot with to show how average arrival delay varies with month
+ggplot(mean_ArrDelay_day, aes(x = DayOfWeek, y = mean_ArrDelay)) +
+  geom_line() +
+  ggtitle("Average Arrival Delay for Each Day") +
+  xlab("Day") +
+  ylab("Average Arrival Delay in minutes") +
+  scale_x_continuous(breaks = 1:7, labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Saving the plot locally as a png
+ggsave("Average Delay for Each Day - R.png")
+```
+
+## Best time of day to fly to minimize delays
+
+For this part "CRSDepTime" is used since anyone planning on flying can only plan using the scheduled departure time
+
+```{r}
+# Creating new column and binning the scheduled deparure times into time groups
+cleaned_df <- cleaned_df %>% 
+  mutate(TimeBins = case_when(
+    CRSDepTime < 400 ~ "0000 - 0400",
+    CRSDepTime >= 400 & CRSDepTime < 800 ~ "0400 - 0800",
+    CRSDepTime >= 800 & CRSDepTime < 1200 ~ "0800 - 1200",
+    CRSDepTime >= 1200 & CRSDepTime < 1600 ~ "1200 - 1600",
+    CRSDepTime >= 1600 & CRSDepTime < 2000 ~ "1600 - 2000",
+    CRSDepTime >= 2000 & CRSDepTime < 2400 ~ "2000 - 2400",
+    TRUE ~ "invalid"
+  ))
+```
+
+```{r}
+# Creating a new varibale to hold the average delay grouped by time
+mean_ArrDelay_time <- cleaned_df %>%
+  group_by(TimeBins) %>%
+  summarise(mean_ArrDelay = mean(ArrDelay, na.rm = TRUE))
+mean_ArrDelay_time
+```
+
+```{r}
+# Plotting a line plot with to show how average arrival delay varies with time
+ggplot(data = mean_ArrDelay_time, aes(x = TimeBins, y = mean_ArrDelay, group = 1)) +
+  geom_line() +
+  labs(title = "Average Arrival for each Timeframe", 
+       x = "Time of the day in 24-hour format", 
+       y = "Average Arrival Delay in minutes") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Saving the plot locally as a png
+ggsave("Average Delay for Time - R.png")
+```
+
+```{}
+```

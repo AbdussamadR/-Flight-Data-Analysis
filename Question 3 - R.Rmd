@@ -1,0 +1,197 @@
+---
+title: "Abdussamad - 190519205 - Question 3 - R"
+author: "Abdussamad Roshan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 3 - How does the number of people flying between different locations change over time?
+
+## Importing and Loading Packages
+
+```{r}
+# # Installing the necessary packages
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("plotly")
+install.packages("rmarkdown")
+install.packages("scales")
+install.packages("tidyverse")
+```
+
+```{r}
+# Loading the packages
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(rmarkdown)
+library(scales)
+library(tidyr)
+library(tidyverse)
+```
+
+## Importing the Datasets
+
+```{r}
+# Importing the main cleaned dataset
+cleaned_df <- read.csv("Cleaned_Dataset_R.csv")
+# Importing the Plane Data, any NA or empty values are replaced with NA
+airports_df <- read.csv("airports.csv", na.strings = c("", "NA"))
+```
+
+```{r}
+# Checking the first 5 rows of the airports dataset
+head(airports_df, n = 5)
+```
+
+```{r}
+# Checking for any duplicated rows in the Airports Dataset
+head(airports_df[duplicated(airports_df),])
+```
+
+```{r}
+# Checking for null values in the airports dataset
+colSums(is.na(airports_df))
+```
+
+```{r}
+# Removing all rows with null values in the airports dataset and checking if they have been removed
+airports_df <- na.omit(airports_df)
+colSums(is.na(airports_df))
+```
+
+States will be used to compare how flights change between locations
+
+```{r}
+# Filtering to keep only the neccessary columns in the main dataset
+cleaned_df <- cleaned_df[, c("Year", "Origin", "Dest")]
+cleaned_df
+```
+
+```{r}
+# Filtering to keep only the neccessary columns in the airports dataset
+airports_df1 <- airports_df[, c("iata", "state")]
+airports_df2 <- airports_df[, c("iata", "state")]
+```
+
+We need 2 sets of the filtered airports dataset to get both origin and destination state
+
+airports_df1 will be used to get the origin state
+
+airports_df2 will be used to get the destination state
+
+```{r}
+# Renaming the columns in airports_df1
+colnames(airports_df1) <- c("Origin", "Origin_State")
+airports_df1
+```
+
+```{r}
+# Renaming the columns in airports_df2
+colnames(airports_df2) <- c("Dest", "Destination_State")
+airports_df2
+```
+
+```{r}
+# Merging airports_df1 and the main dataset to get the origin for each flight
+merged_df <- merge(cleaned_df, airports_df1, by = "Origin")
+merged_df
+```
+
+```{r}
+#Merging airports_df2 and the merged dataset to get the destination for each fligh
+merged_df <- merge(merged_df, airports_df2, by = "Dest")
+merged_df
+```
+
+```{r}
+# Creating a new column "Route" that combines the Origin_State and Destination_State
+merged_df$Route <- paste(merged_df$Origin_State, "-", merged_df$Destination_State)
+merged_df
+```
+
+```{r}
+# Filtering to keep only the required columns
+merged_df <- merged_df[, c("Year", "Route")]
+merged_df
+```
+
+```{r}
+# Getting the count of each route and stroing it in a new dataframe in descedning orde rof count
+count_of_routes <- as.data.frame(table(merged_df$Route)) %>%
+  arrange(desc(Freq))
+colnames(count_of_routes) <- c("Route", "Count")
+count_of_routes
+```
+
+```{r}
+# Creating a list with only the top 20 most used routes
+top20_routes <- head(count_of_routes$Route, 20)
+top20_routes
+```
+
+```{r}
+# Keeping entries in the merged dataset with the top 20 most used routes
+merged_df <- merged_df[merged_df$Route %in% top20_routes, ]
+merged_df
+```
+
+```{r}
+# Grouping the data by year and route and getting the count of how many flights were taken for a  sepcific route for each year
+route_counts <- merged_df %>%
+  group_by(Year, Route) %>%
+  summarize(Count = n())
+route_counts
+```
+
+```{r}
+# Splitting the "route_counts" by years
+y2006_df <- route_counts[route_counts$Year == 2006, ]
+y2007_df <- route_counts[route_counts$Year == 2007, ]
+```
+
+```{r}
+# Setting the positions on the x-axis for the bars of each year
+x_positions_1 <- 1:length(y2006_df$Route)
+x_positions_2 <- x_positions_1 + 0.4
+
+# Creating a new plot
+plot <- ggplot()
+
+# Plotting the data for 2006
+plot <- plot + geom_bar(data = y2006_df, aes(x = x_positions_1 - 0.2, y = Count),
+                        width = 0.4, fill = "blue", alpha = 0.9, stat = "identity",
+                        position = "identity", show.legend = TRUE)
+
+# Plotting the data for 2007
+plot <- plot + geom_bar(data = y2007_df, aes(x = x_positions_2 - 0.2, y = Count),
+                        width = 0.4, fill = "red", alpha = 0.9, stat = "identity",
+                        position = "identity", show.legend = TRUE)
+
+# Setting the x-axis tick positions and labels
+plot <- plot + scale_x_continuous(breaks = x_positions_1, labels = y2006_df$Route, 
+                                   expand = c(0,0)) + labs(x = "Route")
+
+# Changing the y-axis labels to regular numbers, if not they will appear as scientific like 1e+05 and so on
+plot <- plot + scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE),
+                                  limits = c(0, max(route_counts$Count) + 50000), breaks = seq(0, max(route_counts$Count) + 50000, 50000),
+                                  expand = c(0, 0.1)) + labs(y = "Total Number of Flights")
+
+# Adding the title for the plot
+plot <- plot + labs(title = "Total Number of Flights for the 20 most flown routes")
+
+# Flipping the x-axis labels so that to increase clarity
+plot <- plot + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# Moving the title of the plot to the middle
+plot <- plot + theme(plot.title = element_text(hjust = 0.5))
+
+# Printingthe plot
+print(plot)
+
+# Saving the plot locally as a png
+ggsave("Total Number of Flights for the 20 most flown routes - R.png")
+```
